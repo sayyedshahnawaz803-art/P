@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LitePay Ultimate - Mobile Pay</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root { --p: #1a73e8; --s: #34a853; --err: #d93025; --bg: #f8f9fa; }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body { font-family: 'Segoe UI', Roboto, sans-serif; background: #202124; margin: 0; display: flex; justify-content: center; }
+        
+        .phone-screen { width: 100%; max-width: 450px; height: 100vh; background: var(--bg); position: relative; overflow: hidden; display: flex; flex-direction: column; }
+        
+        /* Header */
+        .top-nav { padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; background: white; border-bottom: 1px solid #eee; }
+        .user-av { width: 35px; height: 35px; background: var(--p); border-radius: 50%; color: white; display: grid; place-items: center; font-weight: bold; }
+
+        /* Balance Card */
+        .hero { padding: 25px; background: white; text-align: center; border-bottom: 1px solid #eee; }
+        .bal-amount { font-size: 32px; font-weight: bold; color: #202124; margin: 5px 0; }
+        
+        /* Actions Grid */
+        .main-actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; padding: 20px; background: white; }
+        .act-btn { border: none; background: none; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+        .act-btn .icon { width: 50px; height: 50px; background: #e8f0fe; color: var(--p); border-radius: 15px; display: grid; place-items: center; font-size: 20px; }
+        .act-btn span { font-size: 11px; font-weight: 600; color: #3c4043; }
+
+        /* Modal / Popup */
+        .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; z-index: 1000; align-items: flex-end; }
+        .modal-content { width: 100%; max-width: 450px; background: white; border-radius: 24px 24px 0 0; padding: 30px 20px; animation: slideUp 0.3s ease; }
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        
+        input { width: 100%; padding: 15px; border: 1px solid #dadce0; border-radius: 12px; font-size: 16px; margin-bottom: 15px; outline: none; }
+        .confirm-btn { width: 100%; padding: 16px; background: var(--p); color: white; border: none; border-radius: 30px; font-size: 16px; font-weight: bold; cursor: pointer; }
+
+        /* History */
+        .history-section { flex: 1; overflow-y: auto; background: white; border-top: 1px solid #eee; padding: 10px 0; }
+        .list-item { display: flex; align-items: center; padding: 12px 20px; border-bottom: 1px solid #f8f9fa; }
+        .item-info { flex: 1; margin-left: 15px; }
+        .item-amt { font-weight: bold; }
+
+        /* Success Overlay */
+        .success-anim { position: fixed; inset: 0; background: var(--s); color: white; display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 2000; }
+    </style>
+</head>
+<body>
+
+<div class="phone-screen">
+    <div class="top-nav">
+        <div class="user-av">A</div>
+        <div style="font-weight: 600;">LitePay Mobile</div>
+        <i class="fa fa-bell" style="color: #5f6368;"></i>
+    </div>
+
+    <div class="hero">
+        <div style="color: #5f6368; font-size: 13px; font-weight: 500;">BANK BALANCE</div>
+        <div class="bal-amount" id="mainBal">₹15,000.00</div>
+    </div>
+
+    <div class="main-actions">
+        <button class="act-btn" onclick="openMobilePay()"><div class="icon"><i class="fa fa-phone"></i></div><span>To Mobile</span></button>
+        <button class="act-btn" onclick="openGenericPay('Scan QR')"><div class="icon"><i class="fa fa-qrcode"></i></div><span>Scan QR</span></button>
+        <button class="act-btn" onclick="openGenericPay('Bank Transfer')"><div class="icon"><i class="fa fa-university"></i></div><span>To Bank</span></button>
+        <button class="act-btn" onclick="addMoney()"><div class="icon" style="color:var(--s)"><i class="fa fa-plus"></i></div><span>Add Cash</span></button>
+    </div>
+
+    <div style="padding: 10px 20px; font-weight: bold; font-size: 14px; color: #5f6368;">RECENT TRANSACTIONS</div>
+    <div class="history-section" id="txLog">
+        </div>
+</div>
+
+<div class="modal" id="mobileModal">
+    <div class="modal-content">
+        <h2 style="margin-top:0">Pay to Mobile</h2>
+        <input type="number" id="mobileNum" placeholder="Enter 10-digit mobile number">
+        <input type="number" id="mobileAmt" placeholder="Enter Amount (₹)">
+        <input type="password" id="mobilePin" placeholder="Enter PIN (Default: 1234)">
+        <button class="confirm-btn" onclick="processMobilePay()">Pay Now</button>
+        <button onclick="closeModals()" style="width:100%; background:none; border:none; margin-top:15px; color:gray;">Cancel</button>
+    </div>
+</div>
+
+<div class="success-anim" id="successScreen">
+    <i class="fa fa-check-circle" style="font-size: 80px;"></i>
+    <h2>Payment Successful</h2>
+    <p id="successDetail"></p>
+    <button onclick="hideSuccess()" style="margin-top:20px; padding: 10px 30px; border-radius: 20px; border:none; font-weight:bold;">Back to Home</button>
+</div>
+
+<script>
+    let balance = 15000;
+    const txLog = document.getElementById('txLog');
+
+    function openMobilePay() {
+        document.getElementById('mobileModal').style.display = 'flex';
+    }
+
+    function closeModals() {
+        document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
+    }
+
+    function processMobilePay() {
+        const num = document.getElementById('mobileNum').value;
+        const amt = parseFloat(document.getElementById('mobileAmt').value);
+        const pin = document.getElementById('mobilePin').value;
+
+        if (num.length !== 10) return alert("Please enter a valid 10-digit mobile number");
+        if (!amt || amt <= 0) return alert("Enter valid amount");
+        if (pin !== "1234") return alert("Wrong PIN!");
+        if (amt > balance) return alert("Insufficient Balance!");
+
+        balance -= amt;
+        addTransaction(`Paid to ${num}`, amt, 'neg');
+        showSuccess(amt, `Mobile: ${num}`);
+        closeModals();
+    }
+
+    function addMoney() {
+        balance += 1000;
+        addTransaction("Added to Wallet", 1000, 'pos');
+        alert("₹1,000 added to your account!");
+    }
+
+    function addTransaction(name, amt, type) {
+        document.getElementById('mainBal').innerText = `₹${balance.toLocaleString('en-IN')}.00`;
+        const html = `
+            <div class="list-item">
+                <div class="user-av" style="background:#f1f3f4; color:#555;"><i class="fa fa-user"></i></div>
+                <div class="item-info">
+                    <div style="font-weight:500;">${name}</div>
+                    <div style="font-size:11px; color:gray;">${new Date().toLocaleTimeString()}</div>
+                </div>
+                <div class="item-amt" style="color:${type==='neg'?'#d93025':'#34a853'}">
+                    ${type==='neg'?'-':'+'} ₹${amt}
+                </div>
+            </div>`;
+        txLog.insertAdjacentHTML('afterbegin', html);
+    }
+
+    function showSuccess(amt, detail) {
+        document.getElementById('successDetail').innerText = `₹${amt} sent to ${detail}`;
+        document.getElementById('successScreen').style.display = 'flex';
+    }
+
+    function hideSuccess() {
+        document.getElementById('successScreen').style.display = 'none';
+        // Clear inputs
+        document.getElementById('mobileNum').value = "";
+        document.getElementById('mobileAmt').value = "";
+        document.getElementById('mobilePin').value = "";
+    }
+
+    function openGenericPay(type) {
+        let amt = prompt(`Enter amount for ${type}:`);
+        if(amt && !isNaN(amt)) {
+            let pin = prompt("Enter PIN:");
+            if(pin === "1234") {
+                if(balance >= amt) {
+                    balance -= amt;
+                    addTransaction(type, amt, 'neg');
+                    showSuccess(amt, type);
+                } else { alert("Insufficient Balance!"); }
+            } else { alert("Wrong PIN!"); }
+        }
+    }
+</script>
+
+</body>
+</html>
